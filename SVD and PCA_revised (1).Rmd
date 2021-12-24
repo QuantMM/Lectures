@@ -1,0 +1,292 @@
+---
+title: "SVD and PCA (revised)"
+author: "Sunmee Kim"
+date: '2021-10-28'
+output: 
+  html_document: 
+    fig_height: 6
+    fig_width: 6
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(echo = FALSE)
+```
+
+
+<style type="text/css">
+
+h1.title {
+  font-size: 38px;
+  /* color: DarkRed; */
+  text-align: center;
+}
+h4.author {
+  font-size: 20px;
+  /* font-family: "Times New Roman", Times, serif; */
+  /* color: DarkRed; */
+  text-align: center;
+}
+h4.date {
+  font-size: 20px;
+  text-align: center;
+}
+</style>
+
+***
+
+## Part 1. Singular Value Decomposition (SVD)
+
+Singular Value Decomposition is a matrix factorization method which is used in much of advanced statistical modeling, e.g., principal component analysis and penalized likelihood methods such as smoothing splines and ridge regressions. SVD provides a convenient way for breaking a data matrix into simpler and meaningful pieces. In this lecture, we will simply review the important concepts and how to compute a SVD of matrix, but more intuitive insights into the central idea behind SVD can be found here: [*We Recommend a Singular Value Decomposition*](http://www.ams.org/publicoutreach/feature-column/fcarc-svd).
+
+#### ***1. Existence of the SVD for a general matrix, X***
+
+In linear algebra, the Singular Value Decomposition of a matrix is a factorization of that matrix into three matrices. It has some interesting algebraic properties and conveys important geometrical and theoretical insights about linear transformations.
+
+\begin{equation}
+X_{(n×m)} = U_{(n×n)}D_{(n×m)}V^{T}_{(m×m)}
+\end{equation}
+
+This is called the SVD of X:
+
+  - The diagonals of $D$ are called the singular values of $X$ (often sorted in decreasing order)
+  - The columns of $U$ are called the left singular vectors of $X$
+  - The columns of $V$ are called the right singular vectors of $X$.
+
+In addition, you can show that:
+
+  - $U$ is the eigenvectors matrix of $XX^{T}$
+  - $V$ is the eigenvectors matrix of $X^{T}X$
+
+(Refer to [this article](https://towardsdatascience.com/understanding-singular-value-decomposition-and-its-application-in-data-science-388a54be95d) for the mathematical intuition behind eigenvalues and SVD and their geometrical meanings)
+
+Now, let's assume that there are $p$ singular values which are ordered and real (i.e., non-zero singular values):
+
+\begin{equation}
+\sigma_{1} \ge \sigma_{2} \ge ... \ge \sigma_{p} > 0.
+\end{equation}
+
+See the notations used in a so-called '*economic*' SVD form (illustrated in [this graphic](https://universityofmanitoba.desire2learn.com/content/enforced3/454735-21299.202190/SVD%20matrix%20dimension.jpg?d2lSessionVal=V5ZNVboCl9nsmB5Q2TCTSacaX&ou=454735)):
+
+\begin{equation}
+X_{n×m} = U_{R(n×p)}D_{R(p×p)}V^{T}_{R(p×m)}
+\end{equation}
+
+Notice that the non-zero singular values form the diagonal matrix of singular values, $D_{R}$, in the graphical illustration. Of course, R functions such as `svd()` and `prcomp()` use this economic version.
+
+Anyway, what we want to remember is that *principal components, a very important statistical representation of your data, can be achieved by computing the SVD of the mean subtracted data.* And the `prcomp()` and `FactoMineR::PCA()` functions use the SVD. As an alternative to the SVD, an eigen decomposition, a standard technique in linear algebra also known as eigenvalue decomposition, spectral decomposition, or diagonalization, can be used, and this is employed in the function `princomp()` in R.
+
+#### ***2. Running Example***
+
+Generate 50,000 random variates from a Standard Normal distribution and fill out a 1,000-by-50 matrix called `Mat` with the generated values.
+```{r, echo=TRUE, collapse=T, message=FALSE}
+set.seed(5)
+N=5000
+
+Mat <- matrix(rnorm(5000), nrow=1000, ncol=50, byrow=T)
+col.means <- colMeans(Mat)
+```
+
+Then, compute a SVD of `Mat` using the `svd()` function, and store the result in a new R object named `Mat_svd`. Use the `str()` function to check the class of `Mat_svd` and its components.
+```{r, echo=TRUE, collapse=T, message=FALSE}
+Mat_svd <- svd(Mat)
+str(Mat_svd)
+```
+
+Now, we denote `Mat` by a matrix $X_{(n=1000,d=50)}$ and a new matrix $D$ which is a diagonal matrix containing the singular values of $X$. Using the components of `Mat_svd`, show the matrix product $UDV^{T}$ is actually equal to the original matrix `Mat`. You can use the `all.equal()` function to compare the two.
+
+```{r, echo=TRUE, collapse=T, message=FALSE}
+D <- diag(Mat_svd$d)
+U <- Mat_svd$u
+V <- Mat_svd$v
+all.equal(U %*% D %*% t(V), Mat)
+```
+
+Now compute the cross-product of `Mat`, i.e., $XX^{T}$, and store the matrix in a new object called `Mat_cross`. Provide the eigen-decomposition of `Mat_cross` using the `eigen()` function, and verify that the squared singular values of `Mat` are equal to the eigenvalues of `Mat_cross`.
+
+```{r, echo=TRUE, collapse=T, message=FALSE}
+Mat_cross <- t(Mat) %*% Mat # is equivalent to: tcrossprod(Mat)
+# Note that "Mat_cross"" is a 50-by-50 matrix, which means ...
+# all.equal(crossprod(Mat), t(Mat)%*%Mat)
+# all.equal(tcrossprod(Mat), Mat%*%t(Mat))
+dim(Mat_cross)
+
+EIG <- eigen(Mat_cross, only.values = T)$values
+# only the eigenvalues are computed, simply for computation efficiency.
+all.equal((Mat_svd$d)^2, EIG)
+```
+
+#### ***3. Graphical Illustration***
+
+SVD can be used to represent data efficiently. Suppose that we wish to transmit the following image, which consists of an array of 25 x 15 black or white pixels.
+
+![](http://www.ams.org/featurecolumn/images/august2009/svd.O.gif)
+
+Since there are only three types of columns in this image, as shown below, it should be possible to represent the data in a more compact form.
+
+![](http://www.ams.org/featurecolumn/images/august2009/svd.O.0.gif)   ![](http://www.ams.org/featurecolumn/images/august2009/svd.O.1.gif)   ![](http://www.ams.org/featurecolumn/images/august2009/svd.O.2.gif)
+
+If we perform a on M, a 25 by 15 matrix in which each entry is either a 0, representing a black pixel, or 1, representing white, we find there are only three non-zero singular values:
+
+```{r, echo=F, eval=T, collapse=T, message=FALSE}
+pixel <- c(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,1,1,1,1,1,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1)
+
+M <- matrix(pixel, nrow=25, ncol=15, byrow = T)
+```
+
+```{r, echo=TRUE, collapse=T, message=FALSE}
+M_svd <- svd(M)
+str(M_svd)
+round(M_svd$d,3)
+```
+
+Therefore, the matrix may be represented as: $M_{(25×15)} = U_{(25×15)}D_{(15×15)}V^{T}_{(15×15)}$, or equivalently, $M_{(25×15)} = U_{(25×3)}D_{(3×3)}V^{T}_{(3×15)}$.
+
+```{r, echo=TRUE, collapse=T, message=FALSE}
+D <- diag(M_svd$d)
+U <- M_svd$u
+V <- M_svd$v
+all.equal(U %*% D %*% t(V), M)
+
+D <- diag(M_svd$d[1:3])
+U <- M_svd$u[,1:3]
+V <- M_svd$v[,1:3]
+all.equal(U %*% D %*% t(V), M)
+```
+
+$M=u_1d_1v^{T}_{1} + u_2d_2v^{T}_{2} + u_3d_3v^{T}_{3}$
+
+This implies that we may represent the original data matrix using only three singular values (thus, $D$ is a 3 by 3 matrix), and their corresponding vectors of $U$ and $V$, i.e., three vectors $u_{i}$, each of which has 25 entries, and three vectors $v^{T}_{i}$, each of which has 15 entries. This also implies that we may represent the matrix using only 123 numbers rather than the 375 that appear in the original matrix. In this way, SVD discovers the redundancy in the matrix and provides a format for eliminating it.
+
+We're going to talk about how you can use the SVD to compute the principal component analysis.
+
+***
+
+## Part 2. Principal Component Analysis (PCA)
+
+PCA is a powerful dimension reduction technique designed to summarize the most important information of the original data by computing a new set of variables, called principal components. These new variables correspond to a linear combination of the originals. The number of principal components is less than or equal to the number of original variables. The goal of PCA is to identify principal components along which the variation in the data is maximal so that we can obtain lower-dimensional data with minimal loss of information.
+
+#### ***PCA: Graphical Illustration ***
+
+See the animation below on how the first PC can be found ([Original Source](https://gist.github.com/anonymous/7d888663c6ec679ea65428715b99bfdd)):
+
+![](https://i.stack.imgur.com/Q7HIP.gif)
+
+Note that the first PC can be constructed by drawing a *best* line through the center of the cloud of observations (i.e., blue dots) and projecting all dots onto this line. This new property is given by a linear combination $w_1X_1+w_2X_2$, where each line in the animation corresponds to some particular values of $w_1$ and $w_2$ (Recall the equation $Z_{1}$ on p.6 of the pdf lecture note! These weights are denoted as $\phi$).
+
+#### ***Running Example***
+
+PCA is a type of unsupervised machine learning in which the algorithm is not provided with any pre-assigned labels or the values of a response variable. This section describes how to perform a PCA using the built-in R functions `prcomp()` and a dataset called `USArrests` in the ISLR package.
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+library(ISLR)
+data(USArrests)
+```
+
+This data set contains statistics, in arrests per 100,000 residents for assault, murder, and rape in each of the 50 US states in 1973. Also, the percent of the population in each state living in urban areas is given. First, let's check the correlation between the predictors.
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+library(psych)
+pairs.panels(USArrests, gap = 0, pch=21)
+```
+
+Lower triangles provide the scatter plots of the variables and upper triangles provide the correlation values. Now let's see how to conduct PCA and visualize the results. Here, the center and scale argument are used to scale the variables to have zero mean centered and unit variance before PCA takes place.
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+pc <- prcomp(USArrests, center = TRUE, scale. = TRUE)
+attributes(pc)
+print(pc)
+summary(pc)
+```
+
+The function produces three key objects:
+
+  - Variances of the PCs (`Proportion of Variance`): We will be interested in the proportion of variance explained by a principal component. The variances of the obtained PCs are sorted decreasingly and give an idea of which PCs are contain most of the information of the data (the ones with more variance).
+    - In this example, the first two principal components account for 86.75% of the variance in the original dataset.
+  - Weights of the variables in the PCs (`$rotation`): They give the interpretation of the PCs in terms of the original variables, as they are the coefficients of the linear combination. The $rotation object gives the loading vectors that are used to rotate the original data to obtain the principal components object.
+    - In this example, PC1 is roughly a linear combination of all four variables with negative weights. So it can be interpreted as an indicator of ___.
+    - PC2 has positive weights on Murder and Assault and negative weights on UrbanPop and Rape. It can be interpreted as the contrast between ___.
+    - Note: Interpreting PCs is not so straightforward as interpreting the original variables. The interpretation involves inspecting the weights and interpreting the linear combination of the original variables.
+  - Scores of the original data in the PCs (`$x`): This is the data with the obtained PCs. The scores are uncorrelated or orthogonal to each other. Using the outputs, we can see the orthogonality of obtained PCs (See below).
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+pairs.panels(pc$x, gap = 0, pch=21)
+```
+
+#### ***Plots in PCA***
+
+##### ***(1) Scree Plot***
+
+Now let's generate a scree plot using the variances of the PCs:
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+explained_var <- pc$sdev^2 / sum(pc$sdev^2)
+plot(explained_var,
+     xlab = "Principal Components", ylab = "Proportion of Variance Explained",
+     ylim = c(0, 1), type = 'b')
+```
+
+In PCA, a scree plot displays how much variation each principal component captures from the data. So, it is used as a diagnostic tool to check whether PCA works well on your data or not. Recall that, principal components are created in order of the amount of variation they cover, i.e., PC1 captures the most variation, PC2 the second most, and so on. Each of them contributes some information of the data, and in a PCA, there are as many principal components as there are characteristics. Leaving out PCs and we lose information. Thus, the selection of the number of components brings the discussion of a trade-off between the variance of the original data that we want to explain and the price we need to pay for dealing with a more complex dataset.
+
+There are several heuristic rules in order to determine the number of components:
+
+  - Select the number of PCs up to a threshold of the percentage of variance explained, such as 80% or 90%.
+  - Look for an “elbow” in the scree plot whose location gives the number of PCs. Ideally, this elbow appears at the PC for which the next PC variances are almost similar and notably smaller when compared with the first ones.
+  - Kaiser rule: Pick PCs with eigenvalues of at least 1.
+  - You also want to consider the interpretability of the final result. For example, if you end up with too many principal components, PCA might not be the best way to visualize your data. [Here](https://bookdown.org/egarpor/SSS2-UC3M/pca-examps.html#pca-examps-datasets) you can see a couple of more case studies illustrating the decision on the number of PCs.
+
+If you use the `factoextra` package, many different plots will be generated automatically:
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+library(factoextra)
+fviz_eig(pc)
+```
+
+##### ***(2) Loading Plot***
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+# Graph of variables
+fviz_pca_var(pc,
+             col.var = "contrib", # Color by contributions to the PC
+             gradient.cols = c("#E7B800", "#FC4E07"),
+             repel = TRUE  # Avoid text overlapping
+             )
+```
+
+Here, the plot shows a two-dimensional correlation monoplot of the loading coefficients of the first two principal components (x-axis = PC1, y-axis = PC2), and we can visualize two things: first, the relationships between the original variables; second, how much weight each variable has on each PC.
+
+First, the angle between the vectors is an approximation of the correlation between the variables. So, we can see how the original variables correlate with one another:
+
+  - A small angle indicates the variables are positively correlated, an angle of 90 degrees indicates the variables are not correlated, and an angle close to 180 degrees indicates the variables are negatively correlated.
+    - In other words, when two vectors in the plot are close, forming a small angle, the two variables they represent are positively correlated (e.g., Murder and Assault). If they meet each other at 90°, they are not likely to be correlated (e.g., Murder and UrbanPop). When they diverge and form a large angle (close to 180°), they are negative correlated.
+    
+Second, we use the loading plot to identify which variables have the largest effect on each component. Recall the output `pc$rotation`: loadings can range from -1 to 1; loadings close to -1 or 1 indicate that the variable strongly influences the component, and loadings close to 0 indicate that the variable has a weak influence on the component. Thus, the length of the line and its closeness to the circle indicate how well the variable is represented in the plot. In other words, the distance between each vector and the origin measures the variable's contribution on the extracted principal components.
+
+  - In this example, the first two principal components only account for 87% of the variance in the original dataset, and they still provide a useful approximation of the relationships between the variables.
+
+Lastly, you can see the explanations on how to calculate the values across three different options for the `col.var` argument (see `?fviz_pca_var`; `col.var` can be `coord`, `cos2` or 'contrib'):
+
+  - coord = loadings * the component standard deviations
+  - cos2 = coord^2
+  - contrib = the contribution of a variable to a given principal component is (in percentage) : (cos2 * 100) / (total cos2 of the component)
+
+##### ***(3) BiPlot***
+
+Let’s see how we can represent our original data into a plot called biplot that summarizes all the analysis for the first two PCs. A biplot can be used to visualize both the principal component scores and the principal component loadings (i.e., PC scores of individuals + variable correlation or loading plot). To create biplots,
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+biplot(pc, scale = 0)
+```
+
+Here, use the left and bottom axes to read PCA scores of the individuals, and note that top and right axes belong to the variable correlation plot: Use them to read how strongly each vector influences the principal components.
+
+
+```{r, echo=TRUE, collapse=T, message=FALSE, warning=FALSE}
+# Biplot of individuals and variables
+fviz_pca_biplot(pc,repel = TRUE)    
+```
+
+To conclude, the selection of the final number of PCs and their interpretation through the weights and biplots are key aspects for a successful PCA. 
+
+
+***
